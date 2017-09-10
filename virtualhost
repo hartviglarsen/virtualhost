@@ -9,9 +9,7 @@ readonly WEBMASTER="webmaster@localhost"
 
 usage() {
 	printf "%s\n" "Usage:"
-	printf "\t%s\n\t%s\n\n" "sudo ./virtualhost create example.local" \
-													"sudo ./virtualhost delete example.local" 
-
+	printf "\t%s\n\n" "sudo virtualhost [create|delete] [domain]"
 	exit
 }
 
