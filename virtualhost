@@ -1,0 +1,121 @@
+#!/usr/bin/env bash
+
+readonly PORT="80"
+readonly SITESAVAILABLE="/etc/apache2/sites-available/"
+readonly ROOT="/var/www/vhosts/"
+readonly GROUP="www-data"
+readonly PERMISSION=755
+readonly WEBMASTER="webmaster@localhost"
+
+usage() {
+	printf "%s\n" "Usage:"
+	printf "\t%s\n\t%s\n\n" "sudo ./virtualhost create example.local" \
+													"sudo ./virtualhost delete example.local" 
+
+	exit
+}
+
+create() {
+
+	if [ -f $domainConf ]; then
+		printf "%s\n" "The domain $domain already has a configuration file"
+		exit
+	fi
+
+	if [ -d $domainRoot ]; then
+		printf "%s\n" "The domain folder already exists!"
+		exit
+	fi
+
+	if ! mkdir $domainRoot ; then
+		printf "%s\n" "Could not create directory: $domainRoot"
+		exit
+	fi
+
+	chown -R "$user:$GROUP" $domainRoot
+	chmod -R $PERMISSION $domainRoot
+
+	if ! echo "
+		<VirtualHost *:$PORT>
+			ServerName $domain
+			ServerAlias $domain
+			ServerAdmin $WEBMASTER
+
+			DocumentRoot $domainRoot
+			
+			<Directory />
+				AllowOverride All
+			</Directory>
+			
+			<Directory $domainRoot>
+				Options Indexes FollowSymLinks MultiViews
+				AllowOverride all
+				Require all granted
+			</Directory>
+		</VirtualHost>" > $domainConf ; then
+			printf "%s\n" "There was an error creating $domain file"
+			exit
+		fi
+
+		if ! echo "127.0.0.1	$domain" >> /etc/hosts ; then
+			printf "%s\n" "Unable to write to /etc/hosts"
+			exit
+		fi
+
+		a2ensite $domain
+
+		printf "%s\n" "Restarting apache..."
+		systemctl restart apache2.service
+
+		printf "%s\n" "Virtualhost created <http://$domain>"
+}
+
+delete() {
+	
+	if ! [ -f $domainConf ] || ! [ -d $domainRoot ]; then
+		printf "%s\n" "Domain <$domain> not found"
+		exit
+	fi
+
+	sed -i "/$domain/d" /etc/hosts
+	
+	rm $domainConf
+	rm -r $domainRoot
+
+	a2dissite $domain
+	systemctl restart apache2.service
+
+}
+
+# Entry point
+main() {
+
+	if [ "$(whoami)" != "root" ]; then
+		printf "%s\n" "This script must be run as root"
+		exit 
+	fi
+
+	if [ $# -ne 2 ]; then
+		usage
+	fi
+
+	local domain=$2
+	local domainRoot=$ROOT${domain//.}
+	local domainConf=$SITESAVAILABLE$domain.conf
+	local user=$SUDO_USER
+
+	case $1 in
+		"create") 
+			create
+			;;
+		"delete")
+			delete
+			;;
+		*)
+			usage
+		;;
+	esac
+ 
+}
+
+main $@
